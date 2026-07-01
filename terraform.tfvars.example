@@ -1,0 +1,26 @@
+aws_region            = "us-east-1"
+environment           = "prod"
+cluster_name          = "enterprise-prod-eks-cluster"
+cluster_version       = "1.29"
+vpc_cidr              = "10.0.0.0/16"
+enable_spot_instances = true
+enable_network_policies = true
+
+node_group_configs = {
+  on_demand_system = {
+    instance_types = ["t3.medium", "t3a.medium"]
+    capacity_type  = "ON_DEMAND"
+    min_size       = 2
+    max_size       = 5
+    desired_size   = 2
+    disk_size      = 50
+  }
+  spot_workload = {
+    instance_types = ["m5.large", "m5a.large", "m6i.large"]
+    capacity_type  = "SPOT"
+    min_size       = 3
+    max_size       = 15
+    desired_size   = 3
+    disk_size      = 100
+  }
+}

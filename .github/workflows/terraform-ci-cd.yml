@@ -1,0 +1,82 @@
+name: "Terraform CI/CD & DevSecOps Pipeline"
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+  workflow_dispatch:
+
+permissions:
+  id-token: write   # Required for OIDC AWS Authentication (No static access keys!)
+  contents: read
+  pull-requests: write
+
+jobs:
+  validate-and-scan:
+    name: "🔍 Lint & Security Scan (Shift-Left)"
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform / OpenTofu
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: "1.7.0"
+
+      - name: Check Formatting
+        id: fmt
+        run: terraform fmt -check -recursive
+        continue-on-error: false
+
+      - name: Initialize Workspace
+        id: init
+        run: terraform init -backend=false
+
+      - name: Validate Syntax
+        id: validate
+        run: terraform validate -no-color
+
+      - name: Run Checkov Static Security Scanning
+        uses: bridgecrewio/checkov-action@master
+        with:
+          framework: terraform
+          output_format: cli
+          soft_fail: false # Block pipeline on critical IAM or unencrypted resource misconfigurations
+
+      - name: Run Infracost Cost Estimation
+        uses: infracost/actions/setup@v2
+        with:
+          api-key: ${{ secrets.INFRACOST_API_KEY }}
+      - name: Generate Infracost Cost Difference Report
+        run: |
+          infracost breakdown --path . --format json --out-file /tmp/infracost.json
+          infracost comment github --path /tmp/infracost.json \
+            --repo $GITHUB_REPOSITORY \
+            --pull-request ${{ github.event.pull_request.number }} \
+            --behavior update
+        if: github.event_name == 'pull_request' && env.INFRACOST_API_KEY != ''
+
+  deploy-plan:
+    name: "📋 Terraform Plan (Speculative Execution)"
+    needs: validate-and-scan
+    runs-on: ubuntu-latest
+    if: github.event_name == 'pull_request'
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Configure AWS Credentials via OIDC
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::123456789012:role/GitHubActionsOIDCTerraformRole
+          aws-region: us-east-1
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+
+      - name: Initialize & Plan
+        run: |
+          terraform init
+          terraform plan -no-color -out=tfplan
