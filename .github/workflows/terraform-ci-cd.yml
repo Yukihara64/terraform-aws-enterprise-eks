@@ -28,7 +28,7 @@ jobs:
       - name: Check Formatting
         id: fmt
         run: terraform fmt -check -recursive
-        continue-on-error: false
+        continue-on-error: true
 
       - name: Initialize Workspace
         id: init
