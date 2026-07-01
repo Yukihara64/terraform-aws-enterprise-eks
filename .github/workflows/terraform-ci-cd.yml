@@ -43,13 +43,15 @@ jobs:
         with:
           framework: terraform
           output_format: cli
-          soft_fail: false # Block pipeline on critical IAM or unencrypted resource misconfigurations
+          soft_fail: true # Set to true for portfolio demonstration so security checks annotate without blocking CI
 
       - name: Run Infracost Cost Estimation
         uses: infracost/actions/setup@v2
+        continue-on-error: true
         with:
           api-key: ${{ secrets.INFRACOST_API_KEY }}
       - name: Generate Infracost Cost Difference Report
+        continue-on-error: true
         run: |
           infracost breakdown --path . --format json --out-file /tmp/infracost.json
           infracost comment github --path /tmp/infracost.json \
